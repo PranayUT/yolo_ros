@@ -51,6 +51,7 @@ class Detect3DNode(LifecycleNode):
         self.declare_parameter("target_frame", "base_link")
         self.declare_parameter("maximum_detection_threshold", 0.3)
         self.declare_parameter("depth_image_units_divisor", 1000)
+        self.declare_parameter("color_to_depth_ratio", 0.5)
         self.declare_parameter(
             "depth_image_reliability", QoSReliabilityPolicy.BEST_EFFORT
         )
@@ -75,6 +76,11 @@ class Detect3DNode(LifecycleNode):
             self.get_parameter("depth_image_units_divisor")
             .get_parameter_value()
             .integer_value
+        )
+        self.color_to_depth_ratio = (
+            self.get_parameter("color_to_depth_ratio")
+            .get_parameter_value()
+            .double_value
         )
         dimg_reliability = (
             self.get_parameter("depth_image_reliability")
@@ -228,10 +234,10 @@ class Detect3DNode(LifecycleNode):
         detection: Detection,
     ) -> BoundingBox3D:
 
-        center_x = int(detection.bbox.center.position.x)
-        center_y = int(detection.bbox.center.position.y)
-        size_x = int(detection.bbox.size.x)
-        size_y = int(detection.bbox.size.y)
+        center_x = int(detection.bbox.center.position.x * self.color_to_depth_ratio)
+        center_y = int(detection.bbox.center.position.y * self.color_to_depth_ratio)
+        size_x = int(detection.bbox.size.x * self.color_to_depth_ratio)
+        size_y = int(detection.bbox.size.y * self.color_to_depth_ratio)
 
         if detection.mask.data:
             # crop depth image by mask
@@ -305,7 +311,7 @@ class Detect3DNode(LifecycleNode):
 
         # build an array of 2d keypoints
         keypoints_2d = np.array(
-            [[p.point.x, p.point.y] for p in detection.keypoints.data], dtype=np.int16
+            [[int(p.point.x * self.color_to_depth_ratio), int(p.point.y * self.color_to_depth_ratio)] for p in detection.keypoints.data], dtype=np.int16
         )
         u = np.array(keypoints_2d[:, 1]).clip(0, depth_info.height - 1)
         v = np.array(keypoints_2d[:, 0]).clip(0, depth_info.width - 1)
